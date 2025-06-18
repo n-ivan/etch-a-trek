@@ -585,7 +585,7 @@ function calculateBounds(activities) {
 
 function downloadImage() {
     const link = document.createElement('a');
-    link.download = 'tracecanvas_' + new Date().toISOString().slice(0, 10) + '.png';
+    link.download = 'etch-a-trek-' + new Date().toISOString().slice(0, 10) + '.png';
     link.href = canvas.toDataURL();
     link.click();
 }
