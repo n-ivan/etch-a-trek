@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Etch-a-Trek - GPS & Route Art Generator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Etch-a-Trek</h1>
+        </div>
+
+        <div class="main-content">
+            <div class="controls">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📍</div>
+                    <h3>Upload Route Files</h3>
+                    <p>Drop .gpx, .txt, .json, or .csv files here or click to browse</p>
+                    <input type="file" id="fileInput" multiple accept=".gpx,.txt,.json,.csv" style="display: none;">
+                </div>
+
+                <div class="control-group">
+                    <label>Or paste route data:</label>
+                    <textarea id="polylineText" placeholder="Paste your route data here...&#10;&#10;Supported formats:&#10;• GPX: Full GPX file content&#10;• Encoded polyline: _p~iF~ps|U_ulLnnqC_mqNvxq`@&#10;• JSON: [[lat,lng],[lat,lng],...]&#10;• CSV: lat,lng (one per line)&#10;• Google Maps URL with encoded polyline"></textarea>
+                </div>
+
+                <div class="control-group">
+                    <label>Canvas Size:</label>
+                    <select id="canvasSize">
+                        <option value="800x600">800 × 600 (4:3)</option>
+                        <option value="1024x768">1024 × 768 (4:3)</option>
+                        <option value="1920x1080" selected>1920 × 1080 (16:9)</option>
+                        <option value="1080x1080">1080 × 1080 (Square)</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+
+                <div class="control-group" id="customSizeGroup" style="display: none;">
+                    <label>Width:</label>
+                    <input type="number" id="customWidth" value="1920" min="100" max="4000">
+                    <label>Height:</label>
+                    <input type="number" id="customHeight" value="1080" min="100" max="4000">
+                </div>
+
+                <div class="control-group">
+                    <label>Line Width:</label>
+                    <input type="range" id="lineWidth" min="0.5" max="10" step="0.5" value="2">
+                    <span id="lineWidthValue">2.0</span>
+                </div>
+
+                <button class="btn btn-secondary" id="downloadBtn" disabled>Download Image</button>
+                <button class="btn btn-danger" id="clearBtn" disabled>Clear All Activities</button>
+
+                <div class="progress" id="progressContainer" style="display: none;">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+
+                <div id="errorContainer"></div>
+                <div id="statsContainer"></div>
+            </div>
+
+            <div class="canvas-area">
+                <div class="activities-table" id="activitiesTable">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" id="selectAllCheckbox" title="Select/Deselect All">
+                                </th>
+                                <th>Activity</th>
+                                <th style="width: 80px;">Points</th>
+                                <th style="width: 80px;">Distance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activitiesTableBody">
+                        </tbody>
+                    </table>
+                </div>
+                <canvas id="canvas" width="800" height="600"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
