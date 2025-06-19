@@ -48,7 +48,11 @@ function loadActivitiesFromLocalStorage() {
             const loadedActivities = JSON.parse(stored);
             // Validate that loaded data is an array
             if (Array.isArray(loadedActivities)) {
-                activities = loadedActivities;
+                // Convert date strings back to Date objects
+                activities = loadedActivities.map(activity => ({
+                    ...activity,
+                    date: activity.date ? new Date(activity.date) : null
+                }));
                 updateUI();
             }
         }
@@ -241,10 +245,49 @@ function parseGPXText(gpxText) {
             throw new Error('Not enough valid GPS points in GPX');
         }
         
+        // Try to extract date from various GPX elements
+        let activityDate = null;
+        
+        // 1. Check metadata time
+        const metadataTime = gpxDoc.querySelector('metadata time');
+        if (metadataTime && metadataTime.textContent) {
+            activityDate = new Date(metadataTime.textContent);
+        }
+        
+        // 2. Check track time
+        if (!activityDate) {
+            const trackTime = gpxDoc.querySelector('trk time');
+            if (trackTime && trackTime.textContent) {
+                activityDate = new Date(trackTime.textContent);
+            }
+        }
+        
+        // 3. Check first track point time
+        if (!activityDate) {
+            const firstTrkpt = gpxDoc.querySelector('trkpt time');
+            if (firstTrkpt && firstTrkpt.textContent) {
+                activityDate = new Date(firstTrkpt.textContent);
+            }
+        }
+        
+        // 4. Check track segment time
+        if (!activityDate) {
+            const trksegTime = gpxDoc.querySelector('trkseg time');
+            if (trksegTime && trksegTime.textContent) {
+                activityDate = new Date(trksegTime.textContent);
+            }
+        }
+        
+        // Validate the date
+        if (activityDate && isNaN(activityDate.getTime())) {
+            activityDate = null;
+        }
+
         return {
             name: 'GPX Track',
             points: points,
-            distance: calculateTotalDistance(points)
+            distance: calculateTotalDistance(points),
+            date: activityDate
         };
     } catch (error) {
         throw new Error('GPX parsing failed: ' + error.message);
@@ -287,7 +330,8 @@ function parsePolylineText(text) {
         points: points,
         distance: calculateTotalDistance(points),
         enabled: true,
-        id: Date.now()
+        id: Date.now(),
+        date: null
     };
 }
 
@@ -437,6 +481,15 @@ function calculateTotalDistance(points) {
     return total;
 }
 
+function formatActivityDate(date) {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+        return '-';
+    }
+    
+    // Format as YYYY-MM-DD
+    return date.toLocaleDateString('en-CA'); // ISO format (YYYY-MM-DD)
+}
+
 function haversineDistance(point1, point2) {
     const R = 6371000; // Earth's radius in meters
     const dLat = (point2.lat - point1.lat) * Math.PI / 180;
@@ -481,6 +534,7 @@ function updateActivitiesTable() {
             <td>
                 <div class="activity-name" title="${activity.name}">${activity.name}</div>
             </td>
+            <td class="activity-stats">${formatActivityDate(activity.date)}</td>
             <td class="activity-stats">${activity.points.length.toLocaleString()}</td>
             <td class="activity-stats">${(activity.distance / 1000).toFixed(1)} km</td>
             <td class="activity-actions">
