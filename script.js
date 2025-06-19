@@ -9,6 +9,9 @@ let activities = [];
 let canvas = document.getElementById('canvas');
 let ctx = canvas.getContext('2d');
 
+// Local storage key for activities
+const ACTIVITIES_STORAGE_KEY = 'etch-a-trek-activities';
+
 // DOM elements
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
@@ -29,8 +32,34 @@ const activitiesTable = document.getElementById('activitiesTable');
 const activitiesTableBody = document.getElementById('activitiesTableBody');
 const selectAllCheckbox = document.getElementById('selectAllCheckbox');
 
+// Local storage functions
+function saveActivitiesToLocalStorage() {
+    try {
+        localStorage.setItem(ACTIVITIES_STORAGE_KEY, JSON.stringify(activities));
+    } catch (error) {
+        console.warn('Failed to save activities to local storage:', error);
+    }
+}
+
+function loadActivitiesFromLocalStorage() {
+    try {
+        const stored = localStorage.getItem(ACTIVITIES_STORAGE_KEY);
+        if (stored) {
+            const loadedActivities = JSON.parse(stored);
+            // Validate that loaded data is an array
+            if (Array.isArray(loadedActivities)) {
+                activities = loadedActivities;
+                updateUI();
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to load activities from local storage:', error);
+    }
+}
+
 // Initialize
 updateCanvasSize();
+loadActivitiesFromLocalStorage();
 
 // Event listeners
 uploadArea.addEventListener('click', () => fileInput.click());
@@ -75,6 +104,7 @@ function handleTextInput() {
             activity.id = Date.now(); // Simple unique ID
             activities.push(activity);
             polylineText.value = ''; // Clear the text area
+            saveActivitiesToLocalStorage();
             updateUI();
         } catch (error) {
             showError('Error parsing route data: ' + error.message);
@@ -156,6 +186,7 @@ async function processFiles(files) {
     
     // Add new activities to existing list instead of replacing
     activities.push(...newActivities);
+    saveActivitiesToLocalStorage();
     hideProgress();
     updateUI();
 }
@@ -467,6 +498,7 @@ function toggleActivity(activityId) {
     const activity = activities.find(a => a.id === activityId);
     if (activity) {
         activity.enabled = !activity.enabled;
+        saveActivitiesToLocalStorage();
         updateUI();
     }
 }
@@ -476,12 +508,14 @@ function handleSelectAll() {
     activities.forEach(activity => {
         activity.enabled = shouldEnable;
     });
+    saveActivitiesToLocalStorage();
     updateUI();
 }
 
 function clearAllActivities() {
     if (confirm('Are you sure you want to clear all activities? This cannot be undone.')) {
         activities = [];
+        saveActivitiesToLocalStorage();
         updateUI();
         clearError();
         statsContainer.innerHTML = '';
