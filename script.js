@@ -483,6 +483,11 @@ function updateActivitiesTable() {
             </td>
             <td class="activity-stats">${activity.points.length.toLocaleString()}</td>
             <td class="activity-stats">${(activity.distance / 1000).toFixed(1)} km</td>
+            <td class="activity-actions">
+                <button class="delete-btn" onclick="deleteActivity(${activity.id})" title="Delete activity">
+                    ✕
+                </button>
+            </td>
         `;
         
         activitiesTableBody.appendChild(row);
@@ -500,6 +505,18 @@ function toggleActivity(activityId) {
         activity.enabled = !activity.enabled;
         saveActivitiesToLocalStorage();
         updateUI();
+    }
+}
+
+function deleteActivity(activityId) {
+    const activityIndex = activities.findIndex(a => a.id === activityId);
+    if (activityIndex !== -1) {
+        const activity = activities[activityIndex];
+        if (confirm(`Are you sure you want to delete "${activity.name}"? This cannot be undone.`)) {
+            activities.splice(activityIndex, 1);
+            saveActivitiesToLocalStorage();
+            updateUI();
+        }
     }
 }
 
@@ -535,8 +552,9 @@ function showNoEnabledActivitiesMessage() {
     `;
 }
 
-// Make toggleActivity globally accessible
+// Make functions globally accessible
 window.toggleActivity = toggleActivity;
+window.deleteActivity = deleteActivity;
 
 function showStats() {
     const enabledActivities = activities.filter(a => a.enabled);
