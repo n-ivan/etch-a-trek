@@ -285,7 +285,7 @@ function parseGPXText(gpxText) {
 
         return {
             name: 'GPX Track',
-            points: points,
+            polyline: encodePolyline(points),
             distance: calculateTotalDistance(points),
             date: activityDate
         };
@@ -327,7 +327,7 @@ function parsePolylineText(text) {
     
     return {
         name: 'Polyline Track',
-        points: points,
+        polyline: encodePolyline(points),
         distance: calculateTotalDistance(points),
         enabled: true,
         id: Date.now(),
@@ -338,6 +338,38 @@ function parsePolylineText(text) {
 function isEncodedPolyline(text) {
     // Encoded polylines typically contain only specific characters
     return /^[a-zA-Z0-9_\-~`@\?\\\{\}\|\[\]]*$/.test(text) && text.length > 10;
+}
+
+function encodePolyline(points) {
+    // Google's polyline encoding algorithm implementation
+    let encoded = '';
+    let lat = 0;
+    let lng = 0;
+
+    for (const point of points) {
+        const dlat = Math.round(point.lat * 1e5) - lat;
+        const dlng = Math.round(point.lon * 1e5) - lng;
+        
+        lat = Math.round(point.lat * 1e5);
+        lng = Math.round(point.lon * 1e5);
+
+        encoded += encodeValue(dlat) + encodeValue(dlng);
+    }
+
+    return encoded;
+}
+
+function encodeValue(value) {
+    value = value < 0 ? ~(value << 1) : (value << 1);
+    let encoded = '';
+    
+    while (value >= 0x20) {
+        encoded += String.fromCharCode((0x20 | (value & 0x1f)) + 63);
+        value >>= 5;
+    }
+    
+    encoded += String.fromCharCode(value + 63);
+    return encoded;
 }
 
 function decodePolyline(encoded) {
@@ -380,6 +412,18 @@ function decodePolyline(encoded) {
     }
 
     return points;
+}
+
+// Helper function to get decoded points from activity (handles both old and new formats)
+function getActivityPoints(activity) {
+    if (activity.polyline) {
+        // New format - decode polyline
+        return decodePolyline(activity.polyline);
+    } else if (activity.points) {
+        // Old format - return points directly
+        return activity.points;
+    }
+    return [];
 }
 
 function extractPolylineFromURL(url) {
@@ -473,7 +517,16 @@ function parseSpaceSeparatedPolyline(text) {
     return points;
 }
 
-function calculateTotalDistance(points) {
+function calculateTotalDistance(pointsOrActivity) {
+    let points;
+    if (Array.isArray(pointsOrActivity)) {
+        // Called with points array
+        points = pointsOrActivity;
+    } else {
+        // Called with activity object - get points using helper
+        points = getActivityPoints(pointsOrActivity);
+    }
+    
     let total = 0;
     for (let i = 1; i < points.length; i++) {
         total += haversineDistance(points[i-1], points[i]);
@@ -535,7 +588,7 @@ function updateActivitiesTable() {
                 <div class="activity-name" title="${activity.name}">${activity.name}</div>
             </td>
             <td class="activity-stats">${formatActivityDate(activity.date)}</td>
-            <td class="activity-stats">${activity.points.length.toLocaleString()}</td>
+            <td class="activity-stats">${getActivityPoints(activity).length.toLocaleString()}</td>
             <td class="activity-stats">${(activity.distance / 1000).toFixed(1)} km</td>
             <td class="activity-actions">
                 <button class="delete-btn" onclick="deleteActivity(${activity.id})" title="Delete activity">
@@ -612,7 +665,7 @@ window.deleteActivity = deleteActivity;
 
 function showStats() {
     const enabledActivities = activities.filter(a => a.enabled);
-    const totalPoints = enabledActivities.reduce((sum, a) => sum + a.points.length, 0);
+    const totalPoints = enabledActivities.reduce((sum, a) => sum + getActivityPoints(a).length, 0);
     const totalDistance = enabledActivities.reduce((sum, a) => sum + a.distance, 0);
     
     statsContainer.innerHTML = `
@@ -648,7 +701,8 @@ function generateImage() {
     // Draw enabled activities only
     let enabledIndex = 0;
     activities.forEach((activity, originalIndex) => {
-        if (!activity.enabled || activity.points.length < 2) return;
+        const points = getActivityPoints(activity);
+        if (!activity.enabled || points.length < 2) return;
         
         ctx.strokeStyle = DEFAULT_THEME.colour;
         ctx.lineWidth = lineWidth;
@@ -656,7 +710,7 @@ function generateImage() {
         ctx.lineJoin = 'round';
         
         ctx.beginPath();
-        activity.points.forEach((point, i) => {
+        points.forEach((point, i) => {
             const x = padding + (point.lon - bounds.minLon) * scale;
             const y = canvas.height - (padding + (point.lat - bounds.minLat) * scale);
             
@@ -678,7 +732,8 @@ function calculateBounds(activities) {
     let minLon = Infinity, maxLon = -Infinity;
     
     activities.forEach(activity => {
-        activity.points.forEach(point => {
+        const points = getActivityPoints(activity);
+        points.forEach(point => {
             minLat = Math.min(minLat, point.lat);
             maxLat = Math.max(maxLat, point.lat);
             minLon = Math.min(minLon, point.lon);
