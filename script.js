@@ -9,6 +9,10 @@ let activities = [];
 let canvas = document.getElementById('canvas');
 let ctx = canvas.getContext('2d');
 
+// Sorting state
+let currentSortColumn = null;
+let currentSortDirection = 'asc';
+
 // Local storage key for activities
 const ACTIVITIES_STORAGE_KEY = 'etch-a-trek-activities';
 
@@ -31,6 +35,7 @@ const statsContainer = document.getElementById('statsContainer');
 const activitiesTable = document.getElementById('activitiesTable');
 const activitiesTableBody = document.getElementById('activitiesTableBody');
 const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+const activityTypeFilter = document.getElementById('activityTypeFilter');
 
 // Local storage functions
 function saveActivitiesToLocalStorage() {
@@ -48,10 +53,11 @@ function loadActivitiesFromLocalStorage() {
             const loadedActivities = JSON.parse(stored);
             // Validate that loaded data is an array
             if (Array.isArray(loadedActivities)) {
-                // Convert date strings back to Date objects
+                // Convert date strings back to Date objects and add missing fields
                 activities = loadedActivities.map(activity => ({
                     ...activity,
-                    date: activity.date ? new Date(activity.date) : null
+                    date: activity.date ? new Date(activity.date) : null,
+                    activityType: activity.activityType || 'Unknown'
                 }));
                 updateUI();
             }
@@ -65,6 +71,15 @@ function loadActivitiesFromLocalStorage() {
 updateCanvasSize();
 loadActivitiesFromLocalStorage();
 
+// Add sorting event listeners to table headers
+document.addEventListener('DOMContentLoaded', function() {
+    const sortableHeaders = document.querySelectorAll('.sortable');
+    sortableHeaders.forEach(header => {
+        header.addEventListener('click', () => handleSort(header.dataset.column));
+        header.style.cursor = 'pointer';
+    });
+});
+
 // Event listeners
 uploadArea.addEventListener('click', () => fileInput.click());
 uploadArea.addEventListener('dragover', handleDragOver);
@@ -76,6 +91,7 @@ lineWidthSlider.addEventListener('input', updateLineWidthValue);
 downloadBtn.addEventListener('click', downloadImage);
 clearBtn.addEventListener('click', clearAllActivities);
 selectAllCheckbox.addEventListener('change', handleSelectAll);
+activityTypeFilter.addEventListener('change', handleTypeFilter);
 
 function handleDragOver(e) {
     e.preventDefault();
@@ -283,11 +299,35 @@ function parseGPXText(gpxText) {
             activityDate = null;
         }
 
+        // Try to extract activity type from various GPX elements
+        let activityType = 'Unknown';
+        
+        // 1. Check track type
+        const trackType = gpxDoc.querySelector('trk type');
+        if (trackType && trackType.textContent) {
+            activityType = trackType.textContent.trim();
+        }
+        
+        // 2. Check metadata type if track type not found
+        if (activityType === 'Unknown') {
+            const metadataType = gpxDoc.querySelector('metadata type');
+            if (metadataType && metadataType.textContent) {
+                activityType = metadataType.textContent.trim();
+            }
+        }
+        
+        // Normalize activity type (capitalize first letter)
+        if (activityType !== 'Unknown') {
+            activityType = activityType.toLowerCase();
+            activityType = activityType.charAt(0).toUpperCase() + activityType.slice(1);
+        }
+
         return {
             name: 'GPX Track',
             polyline: encodePolyline(points),
             distance: calculateTotalDistance(points),
-            date: activityDate
+            date: activityDate,
+            activityType: activityType
         };
     } catch (error) {
         throw new Error('GPX parsing failed: ' + error.message);
@@ -331,7 +371,8 @@ function parsePolylineText(text) {
         distance: calculateTotalDistance(points),
         enabled: true,
         id: Date.now(),
-        date: null
+        date: null,
+        activityType: 'Unknown'
     };
 }
 
@@ -557,6 +598,7 @@ function haversineDistance(point1, point2) {
 function updateUI() {
     const enabledActivities = activities.filter(a => a.enabled);
     clearBtn.disabled = activities.length === 0;
+    updateActivityTypeFilter();
     updateActivitiesTable();
     
     if (enabledActivities.length > 0) {
@@ -576,7 +618,13 @@ function updateActivitiesTable() {
     // Clear existing rows
     activitiesTableBody.innerHTML = '';
     
-    activities.forEach((activity, index) => {
+    // Filter activities based on selected type
+    const selectedType = activityTypeFilter.value;
+    const filteredActivities = selectedType === 'all' 
+        ? activities 
+        : activities.filter(a => (a.activityType || 'Unknown') === selectedType);
+    
+    filteredActivities.forEach((activity, index) => {
         const row = document.createElement('tr');
         
         row.innerHTML = `
@@ -588,7 +636,7 @@ function updateActivitiesTable() {
                 <div class="activity-name" title="${activity.name}">${activity.name}</div>
             </td>
             <td class="activity-stats">${formatActivityDate(activity.date)}</td>
-            <td class="activity-stats">${getActivityPoints(activity).length.toLocaleString()}</td>
+            <td class="activity-stats">${activity.activityType || 'Unknown'}</td>
             <td class="activity-stats">${(activity.distance / 1000).toFixed(1)} km</td>
             <td class="activity-actions">
                 <button class="delete-btn" onclick="deleteActivity(${activity.id})" title="Delete activity">
@@ -600,10 +648,10 @@ function updateActivitiesTable() {
         activitiesTableBody.appendChild(row);
     });
 
-    // Update select all checkbox state
-    const enabledCount = activities.filter(a => a.enabled).length;
-    selectAllCheckbox.checked = enabledCount === activities.length && activities.length > 0;
-    selectAllCheckbox.indeterminate = enabledCount > 0 && enabledCount < activities.length;
+    // Update select all checkbox state based on filtered activities
+    const enabledCount = filteredActivities.filter(a => a.enabled).length;
+    selectAllCheckbox.checked = enabledCount === filteredActivities.length && filteredActivities.length > 0;
+    selectAllCheckbox.indeterminate = enabledCount > 0 && enabledCount < filteredActivities.length;
 }
 
 function toggleActivity(activityId) {
@@ -629,11 +677,113 @@ function deleteActivity(activityId) {
 
 function handleSelectAll() {
     const shouldEnable = selectAllCheckbox.checked;
-    activities.forEach(activity => {
+    
+    // Get filtered activities based on current filter
+    const selectedType = activityTypeFilter.value;
+    const filteredActivities = selectedType === 'all' 
+        ? activities 
+        : activities.filter(a => (a.activityType || 'Unknown') === selectedType);
+    
+    // Only update filtered activities
+    filteredActivities.forEach(activity => {
         activity.enabled = shouldEnable;
     });
+    
     saveActivitiesToLocalStorage();
     updateUI();
+}
+
+function handleTypeFilter() {
+    updateActivitiesTable();
+}
+
+function updateActivityTypeFilter() {
+    // Store current selection before rebuilding
+    const currentSelection = activityTypeFilter.value;
+    
+    // Get unique activity types
+    const types = [...new Set(activities.map(a => a.activityType || 'Unknown'))].sort();
+    
+    // Clear existing options except "All Types"
+    activityTypeFilter.innerHTML = '<option value="all">All Types</option>';
+    
+    // Add type options
+    types.forEach(type => {
+        const option = document.createElement('option');
+        option.value = type;
+        option.textContent = type;
+        activityTypeFilter.appendChild(option);
+    });
+    
+    // Restore previous selection if it still exists, otherwise default to "all"
+    if (currentSelection === 'all' || types.includes(currentSelection)) {
+        activityTypeFilter.value = currentSelection;
+    } else {
+        activityTypeFilter.value = 'all';
+    }
+}
+
+function handleSort(column) {
+    // Toggle direction if same column, otherwise reset to ascending
+    if (currentSortColumn === column) {
+        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortColumn = column;
+        currentSortDirection = 'asc';
+    }
+    
+    sortActivities();
+    updateActivitiesTable();
+    updateSortIndicators();
+}
+
+function sortActivities() {
+    activities.sort((a, b) => {
+        let aValue, bValue;
+        
+        switch (currentSortColumn) {
+            case 'name':
+                aValue = a.name || '';
+                bValue = b.name || '';
+                break;
+            case 'date':
+                aValue = a.date ? a.date.getTime() : 0;
+                bValue = b.date ? b.date.getTime() : 0;
+                break;
+            case 'activityType':
+                aValue = a.activityType || 'Unknown';
+                bValue = b.activityType || 'Unknown';
+                break;
+            case 'distance':
+                aValue = a.distance || 0;
+                bValue = b.distance || 0;
+                break;
+            default:
+                return 0;
+        }
+        
+        if (currentSortDirection === 'asc') {
+            return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+        } else {
+            return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+        }
+    });
+}
+
+function updateSortIndicators() {
+    // Clear all indicators
+    const indicators = document.querySelectorAll('.sort-indicator');
+    indicators.forEach(indicator => {
+        indicator.textContent = '';
+    });
+    
+    // Set current column indicator
+    if (currentSortColumn) {
+        const header = document.querySelector(`[data-column="${currentSortColumn}"] .sort-indicator`);
+        if (header) {
+            header.textContent = currentSortDirection === 'asc' ? ' ▲' : ' ▼';
+        }
+    }
 }
 
 function clearAllActivities() {

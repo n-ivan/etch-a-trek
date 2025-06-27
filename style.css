@@ -65,6 +65,21 @@ body {
     overflow: auto;
 }
 
+.table-controls {
+    width: 100%;
+    max-width: 800px;
+    margin-bottom: 15px;
+}
+
+.table-controls .control-group {
+    margin-bottom: 10px;
+}
+
+.table-controls select {
+    width: auto;
+    min-width: 150px;
+}
+
 .canvas-area .activities-table {
     width: 100%;
     max-width: 800px;
@@ -198,6 +213,23 @@ body {
     font-weight: 600;
     font-size: 14px;
     border-bottom: 2px solid #3182ce;
+}
+
+.activities-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.activities-table th.sortable:hover {
+    background: #3182ce;
+}
+
+.sort-indicator {
+    font-size: 12px;
+    margin-left: 4px;
+    display: inline-block;
+    min-width: 12px;
 }
 
 .activities-table td {
